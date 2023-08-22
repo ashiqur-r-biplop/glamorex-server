@@ -26,14 +26,13 @@ const client = new MongoClient(uri, {
 });
 const verifyJWT = (req, res, next) => {
   const authorization = req.headers.authorization;
-  // console.log(authorization);
   if (!authorization) {
     return res
       .status(401)
       .send({ error: true, message: "unauthorized access" });
   }
   const token = authorization.split(" ")[1];
-  // console.log(token);
+
   jwt.verify(token, process.env.ACCESS_SECRET_TOKEN, (err, decoded) => {
     if (err) {
       return res
@@ -98,7 +97,7 @@ async function run() {
       console.log(email);
       const query = { email: email };
       const user = await userCollection.findOne(query);
-      res.send({role: user?.userRole});
+      res.send({ role: user?.userRole });
     });
 
     await client.db("admin").command({ ping: 1 });
