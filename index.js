@@ -32,7 +32,6 @@ const verifyJWT = (req, res, next) => {
       .status(401)
       .send({ error: true, message: "unauthorized access" });
   }
-
   const token = authorization.split(" ")[1];
   // console.log(token);
   jwt.verify(token, process.env.ACCESS_SECRET_TOKEN, (err, decoded) => {
@@ -41,7 +40,6 @@ const verifyJWT = (req, res, next) => {
         .status(401)
         .send({ error: true, message: "unauthorized access2" });
     }
-
     req.decoded = decoded;
     next();
   });
@@ -52,7 +50,6 @@ async function run() {
     // await client.connect();
     const userCollection = client.db("Glamorex").collection("users");
     // Send a ping to confirm a successful connection
-
     // payment system
     app.post("/create-payment-intent", verifyJWT, async (req, res) => {
       const price = req.body.price;
@@ -65,6 +62,15 @@ async function run() {
         });
         res.send({ clientSecret: paymentIntent.client_secret });
       }
+    });
+    // create jwt
+    app.post("/jwt", (req, res) => {
+      const user = req.body;
+      // console.log(user);
+      const token = jwt.sign(user, process.env.ACCESS_SECRET_TOKEN, {
+        expiresIn: "1h",
+      });
+      res.send({ token });
     });
     // all users
     app.post("/users", async (req, res) => {
@@ -85,6 +91,14 @@ async function run() {
       const query = { email: email };
       const user = await userCollection.findOne(query);
       res.send(user);
+    });
+    // get user role
+    app.get("/get-user-role", async (req, res) => {
+      const email = req.query.email;
+      console.log(email);
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      res.send({role: user?.userRole});
     });
 
     await client.db("admin").command({ ping: 1 });
