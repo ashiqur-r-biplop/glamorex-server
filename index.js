@@ -43,13 +43,47 @@ const verifyJWT = (req, res, next) => {
     next();
   });
 };
+// instructor
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
     const userCollection = client.db("Glamorex").collection("users");
+    const productCollection = client
+      .db("Glamorex")
+      .collection("product-collection");
     // Send a ping to confirm a successful connection
     // payment system
+    const verifySeller = async (req, res, next) => {
+      const email = req.decoded;
+      // console.log(email);
+      const query = { email: email.email };
+      // console.log(query, "email");
+      const user = await userCollection.findOne(query);
+      // console.log(user);
+      if (user?.userRole !== "seller") {
+        return res
+          .status(403)
+          .send({ error: true, message: "forbidden message" });
+      }
+      next();
+    };
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded;
+      // console.log(email);
+      const query = { email: email.email };
+      // console.log(query, "email");
+      const user = await userCollection.findOne(query);
+      // console.log(user);
+      if (user?.userRole !== "admin") {
+        return res
+          .status(403)
+          .send({ error: true, message: "forbidden message" });
+      }
+      next();
+    };
+
     app.post("/create-payment-intent", verifyJWT, async (req, res) => {
       const price = req.body.price;
       if (price) {
@@ -83,6 +117,28 @@ async function run() {
       const result = await userCollection.insertOne(user);
       res.send(result);
     });
+    // All product added by data base
+    app.post("/add-product", verifyJWT, verifySeller, async (req, res) => {
+      const { product } = req.body;
+      const newProduct = {
+        ...product,
+        rating: 0,
+        is_featured: false,
+        product_status: "pending",
+        status: `${product.quantity > 0 ? "In stock" : "Out of stock"}`,
+        overall_sell: 0,
+      };
+
+      const result = await productCollection.insertOne(newProduct);
+      res.send(result);
+    });
+    // get seller product by useing query seller email
+    app.get("/get-my-products", verifyJWT, verifySeller, async (req, res) => {
+      const email = req.query.email;
+      const query = { seller_email: email };
+      const filter = await productCollection.find(query).toArray();
+      res.send(filter);
+    });
     // get account page
     app.get("/account/:email", async (req, res) => {
       const email = req.params.email;
@@ -94,11 +150,16 @@ async function run() {
     // get user role
     app.get("/get-user-role", async (req, res) => {
       const email = req.query.email;
-      console.log(email);
       const query = { email: email };
       const user = await userCollection.findOne(query);
       res.send({ role: user?.userRole });
     });
+    // get all user
+    app.get("/all-user", async (req, res) => {
+      const user = await userCollection.find().toArray();
+      return res.send(user);
+    });
+    // get user by role
 
     await client.db("admin").command({ ping: 1 });
     console.log(
@@ -116,5 +177,5 @@ app.get("/", async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`CreativaDesignHub is sitting on port ${port}`);
+  console.log(`Glamorex is sitting on port ${port}`);
 });
