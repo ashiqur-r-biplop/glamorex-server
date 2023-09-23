@@ -53,8 +53,10 @@ async function run() {
     const productCollection = client
       .db("Glamorex")
       .collection("product-collection");
+    const ourTeamCollection = client.db("Glamorex").collection("our-team");
     const developerCollection = client.db("Glamorex").collection("developer");
     const blogsCollection = client.db("Glamorex").collection("blogs");
+    const subscribeCollection = client.db("Glamorex").collection("subscriber");
 
     // Send a ping to confirm a successful connection
     // verify Seller
@@ -133,19 +135,36 @@ async function run() {
     // get account page
     app.get("/account/:email", verifyJWT, verifyCustomer, async (req, res) => {
       const email = req.params.email;
-      console.log(email);
       const query = { email: email };
       const user = await userCollection.findOne(query);
       res.send(user);
     });
-
+    // get current-user
+    app.get("/current-user/:email", verifyJWT, async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      res.send(user);
+    });
+    // all customer get on the database
+    app.get("/only-customer", verifyJWT, async (req, res) => {
+      const users = await userCollection.find().toArray();
+      const customer = users.filter((user) => user?.userRole === "customer");
+      res.send(customer);
+    });
     // all users {User}
     app.get("/developer", async (req, res) => {
       const developer = await developerCollection.find().toArray();
       res.send(developer);
     });
+    // blog api
     app.get("/blogs", async (req, res) => {
       const blogs = await blogsCollection.find().toArray();
+      res.send(blogs);
+    });
+    // get developer team
+    app.get("/our_team", async (req, res) => {
+      const blogs = await ourTeamCollection.find().toArray();
       res.send(blogs);
     });
     app.post("/users", async (req, res) => {
@@ -202,6 +221,22 @@ async function run() {
         res.send(result);
       }
     );
+    // post the subscriber list
+    app.post("/subscribe", verifyJWT, async (req, res) => {
+      const body = req.body;
+      const query = { login_email: body.login_email };
+      const existingSubscriber = await subscribeCollection.findOne(query);
+      if (existingSubscriber) {
+        return res.send({ message: "User already subscribed" });
+      }
+      const result = await subscribeCollection.insertOne(body);
+      res.send(result);
+    });
+    // get the all subscriber
+    app.get("/subscribe-length", async (req, res) => {
+      const subscriber = await subscribeCollection.find().toArray();
+      res.send(subscriber);
+    });
     // All product added by data base {seller}
     app.post("/add-product", verifyJWT, verifySeller, async (req, res) => {
       const { product } = req.body;
@@ -213,7 +248,6 @@ async function run() {
         status: `${product.quantity > 0 ? "In stock" : "Out of stock"}`,
         overall_sell: 0,
       };
-
       const result = await productCollection.insertOne(newProduct);
       res.send(result);
     });
@@ -224,7 +258,6 @@ async function run() {
       const filter = await productCollection.find(query).toArray();
       res.send(filter);
     });
-
     // get all user {Admin}
     app.get("/all-user", verifyJWT, verifyAdmin, async (req, res) => {
       const user = await userCollection.find().toArray();
