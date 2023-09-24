@@ -152,6 +152,11 @@ async function run() {
       const customer = users.filter((user) => user?.userRole === "customer");
       res.send(customer);
     });
+    app.get("/only-seller", verifyJWT, verifyAdmin, async (req, res) => {
+      const users = await userCollection.find().toArray();
+      const customer = users.filter((user) => user?.userRole === "seller");
+      res.send(customer);
+    });
     // all users {User}
     app.get("/developer", async (req, res) => {
       const developer = await developerCollection.find().toArray();
@@ -167,9 +172,9 @@ async function run() {
       const blogs = await ourTeamCollection.find().toArray();
       res.send(blogs);
     });
+    // post all user
     app.post("/users", async (req, res) => {
       const user = req.body;
-      console.log(user);
       const query = { email: user.email };
       const existingUser = await userCollection.findOne(query);
       if (existingUser) {
@@ -268,6 +273,93 @@ async function run() {
       const getAllProduct = await productCollection.find().toArray();
       res.send(getAllProduct);
     });
+
+    app.patch(
+      "/admin/update-product-status",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const body = req.body;
+        const id = body.productId;
+        const filter = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+        console.log(body);
+        const update_product_states = {
+          $set: {
+            product_status: body.status,
+          },
+        };
+        const result = await productCollection.updateOne(
+          filter,
+          update_product_states,
+          options
+        );
+        res.send(result);
+      }
+    );
+    app.patch(
+      "/admin/make-featured",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const body = req.body;
+        const id = body.productId;
+        const filter = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+
+        const allProducts = await productCollection.find().toArray();
+        const featured = allProducts.filter(
+          (product) => product.is_featured === true
+        );
+        console.log(featured?.length);
+        if (featured.length >= 6) {
+          return res.send({ message: "Already six product featured" });
+        }
+        const update_product_states = {
+          $set: {
+            is_featured: true,
+          },
+        };
+        const result = await productCollection.updateOne(
+          filter,
+          update_product_states,
+          options
+        );
+        res.send(result);
+      }
+    );
+    app.patch(
+      "/admin/remove-featured",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.query.id;
+        const filter = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+        const update_product_states = {
+          $set: {
+            is_featured: false,
+          },
+        };
+        const result = await productCollection.updateOne(
+          filter,
+          update_product_states,
+          options
+        );
+        res.send(result);
+      }
+    );
+    app.delete(
+      "/admin/delete-product",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.query.id;
+        const filter = { _id: new ObjectId(id) };
+        const result = await productCollection.deleteOne(filter);
+        res.send(result);
+      }
+    );
 
     await client.db("admin").command({ ping: 1 });
     console.log(
