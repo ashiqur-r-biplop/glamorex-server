@@ -126,7 +126,7 @@ async function run() {
       res.send({ token });
     });
     // get user role
-    app.get("/get-user-role", async (req, res) => {
+    app.get("/get-user-role", verifyJWT, async (req, res) => {
       const email = req.query.email;
       const query = { email: email };
       const user = await userCollection.findOne(query);
@@ -183,6 +183,13 @@ async function run() {
       const result = await userCollection.insertOne(user);
       res.send(result);
     });
+    // get all product by product status true
+    app.get("/products", async (req, res) => {
+      const query = { product_status: "approved" };
+      const approvedProduct = await productCollection.find(query).toArray();
+      res.send(approvedProduct);
+    });
+
     // user profile picture update api {User}
     app.patch("/update-photo", verifyJWT, verifyCustomer, async (req, res) => {
       const body = req.body;
@@ -245,16 +252,20 @@ async function run() {
     // All product added by data base {seller}
     app.post("/add-product", verifyJWT, verifySeller, async (req, res) => {
       const { product } = req.body;
+      console.log(product);
+
       const newProduct = {
         ...product,
         rating: 0,
+        reviews: 0,
         is_featured: false,
         product_status: "pending",
         status: `${product.quantity > 0 ? "In stock" : "Out of stock"}`,
         overall_sell: 0,
       };
-      const result = await productCollection.insertOne(newProduct);
-      res.send(result);
+      console.log(newProduct);
+      // const result = await productCollection.insertOne(newProduct);
+      // res.send(result);
     });
     // get seller product by useing query seller email  {seller}
     app.get("/get-my-products", verifyJWT, verifySeller, async (req, res) => {
@@ -263,6 +274,42 @@ async function run() {
       const filter = await productCollection.find(query).toArray();
       res.send(filter);
     });
+    // update user role {admin}
+    app.patch(
+      "/admin/update-user-role",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const { userId, role } = req.body;
+        const filter = { _id: new ObjectId(userId) };
+        const options = { upsert: true };
+        const updateUserROle = {
+          $set: {
+            userRole: role,
+          },
+        };
+        const result = await userCollection.updateOne(
+          filter,
+          updateUserROle,
+          options
+        );
+        res.send(result);
+      }
+    );
+    // search user {admin}
+    app.get(
+      "/admin/search-user/:search",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const searchProduct = req.params.search;
+        const result = await userCollection
+          .find({ name: { $regex: searchProduct, $options: "i" } })
+          .toArray();
+        res.send(result);
+      }
+    );
+
     // get all user {Admin}
     app.get("/all-user", verifyJWT, verifyAdmin, async (req, res) => {
       const user = await userCollection.find().toArray();
@@ -273,7 +320,7 @@ async function run() {
       const getAllProduct = await productCollection.find().toArray();
       res.send(getAllProduct);
     });
-
+    // update product status {admin}
     app.patch(
       "/admin/update-product-status",
       verifyJWT,
@@ -297,6 +344,7 @@ async function run() {
         res.send(result);
       }
     );
+    // add featured by true {admin}
     app.patch(
       "/admin/make-featured",
       verifyJWT,
@@ -328,6 +376,7 @@ async function run() {
         res.send(result);
       }
     );
+    // remove featured {admin}
     app.patch(
       "/admin/remove-featured",
       verifyJWT,
@@ -349,6 +398,7 @@ async function run() {
         res.send(result);
       }
     );
+    // delete product {admin}
     app.delete(
       "/admin/delete-product",
       verifyJWT,
@@ -357,6 +407,19 @@ async function run() {
         const id = req.query.id;
         const filter = { _id: new ObjectId(id) };
         const result = await productCollection.deleteOne(filter);
+        res.send(result);
+      }
+    );
+    // search product {admin}
+    app.get(
+      "/admin/search-products/:search",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const searchProduct = req.params.search;
+        const result = await productCollection
+          .find({ name: { $regex: searchProduct, $options: "i" } })
+          .toArray();
         res.send(result);
       }
     );
