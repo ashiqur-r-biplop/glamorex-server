@@ -53,8 +53,10 @@ async function run() {
     const productCollection = client
       .db("Glamorex")
       .collection("product-collection");
+    const ourTeamCollection = client.db("Glamorex").collection("our-team");
     const developerCollection = client.db("Glamorex").collection("developer");
     const blogsCollection = client.db("Glamorex").collection("blogs");
+    const subscribeCollection = client.db("Glamorex").collection("subscriber");
 
     // Send a ping to confirm a successful connection
     // verify Seller
@@ -124,7 +126,7 @@ async function run() {
       res.send({ token });
     });
     // get user role
-    app.get("/get-user-role", async (req, res) => {
+    app.get("/get-user-role", verifyJWT, async (req, res) => {
       const email = req.query.email;
       const query = { email: email };
       const user = await userCollection.findOne(query);
@@ -133,24 +135,46 @@ async function run() {
     // get account page
     app.get("/account/:email", verifyJWT, verifyCustomer, async (req, res) => {
       const email = req.params.email;
-      console.log(email);
       const query = { email: email };
       const user = await userCollection.findOne(query);
       res.send(user);
     });
-
+    // get current-user
+    app.get("/current-user/:email", verifyJWT, async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      res.send(user);
+    });
+    // all customer get on the database
+    app.get("/only-customer", verifyJWT, async (req, res) => {
+      const users = await userCollection.find().toArray();
+      const customer = users.filter((user) => user?.userRole === "customer");
+      res.send(customer);
+    });
+    app.get("/only-seller", verifyJWT, verifyAdmin, async (req, res) => {
+      const users = await userCollection.find().toArray();
+      const customer = users.filter((user) => user?.userRole === "seller");
+      res.send(customer);
+    });
     // all users {User}
     app.get("/developer", async (req, res) => {
       const developer = await developerCollection.find().toArray();
       res.send(developer);
     });
+    // blog api
     app.get("/blogs", async (req, res) => {
       const blogs = await blogsCollection.find().toArray();
       res.send(blogs);
     });
+    // get developer team
+    app.get("/our_team", async (req, res) => {
+      const blogs = await ourTeamCollection.find().toArray();
+      res.send(blogs);
+    });
+    // post all user
     app.post("/users", async (req, res) => {
       const user = req.body;
-      console.log(user);
       const query = { email: user.email };
       const existingUser = await userCollection.findOne(query);
       if (existingUser) {
@@ -159,6 +183,13 @@ async function run() {
       const result = await userCollection.insertOne(user);
       res.send(result);
     });
+    // get all product by product status true
+    app.get("/products", async (req, res) => {
+      const query = { product_status: "approved" };
+      const approvedProduct = await productCollection.find(query).toArray();
+      res.send(approvedProduct);
+    });
+
     // user profile picture update api {User}
     app.patch("/update-photo", verifyJWT, verifyCustomer, async (req, res) => {
       const body = req.body;
@@ -202,20 +233,39 @@ async function run() {
         res.send(result);
       }
     );
+    // post the subscriber list
+    app.post("/subscribe", verifyJWT, async (req, res) => {
+      const body = req.body;
+      const query = { login_email: body.login_email };
+      const existingSubscriber = await subscribeCollection.findOne(query);
+      if (existingSubscriber) {
+        return res.send({ message: "User already subscribed" });
+      }
+      const result = await subscribeCollection.insertOne(body);
+      res.send(result);
+    });
+    // get the all subscriber
+    app.get("/subscribe-length", async (req, res) => {
+      const subscriber = await subscribeCollection.find().toArray();
+      res.send(subscriber);
+    });
     // All product added by data base {seller}
     app.post("/add-product", verifyJWT, verifySeller, async (req, res) => {
       const { product } = req.body;
+      console.log(product);
+
       const newProduct = {
         ...product,
         rating: 0,
+        reviews: 0,
         is_featured: false,
         product_status: "pending",
         status: `${product.quantity > 0 ? "In stock" : "Out of stock"}`,
         overall_sell: 0,
       };
-
-      const result = await productCollection.insertOne(newProduct);
-      res.send(result);
+      console.log(newProduct);
+      // const result = await productCollection.insertOne(newProduct);
+      // res.send(result);
     });
     // get seller product by useing query seller email  {seller}
     app.get("/get-my-products", verifyJWT, verifySeller, async (req, res) => {
@@ -224,6 +274,41 @@ async function run() {
       const filter = await productCollection.find(query).toArray();
       res.send(filter);
     });
+    // update user role {admin}
+    app.patch(
+      "/admin/update-user-role",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const { userId, role } = req.body;
+        const filter = { _id: new ObjectId(userId) };
+        const options = { upsert: true };
+        const updateUserROle = {
+          $set: {
+            userRole: role,
+          },
+        };
+        const result = await userCollection.updateOne(
+          filter,
+          updateUserROle,
+          options
+        );
+        res.send(result);
+      }
+    );
+    // search user {admin}
+    app.get(
+      "/admin/search-user/:search",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const searchProduct = req.params.search;
+        const result = await userCollection
+          .find({ name: { $regex: searchProduct, $options: "i" } })
+          .toArray();
+        res.send(result);
+      }
+    );
 
     // get all user {Admin}
     app.get("/all-user", verifyJWT, verifyAdmin, async (req, res) => {
@@ -235,6 +320,109 @@ async function run() {
       const getAllProduct = await productCollection.find().toArray();
       res.send(getAllProduct);
     });
+    // update product status {admin}
+    app.patch(
+      "/admin/update-product-status",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const body = req.body;
+        const id = body.productId;
+        const filter = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+        console.log(body);
+        const update_product_states = {
+          $set: {
+            product_status: body.status,
+          },
+        };
+        const result = await productCollection.updateOne(
+          filter,
+          update_product_states,
+          options
+        );
+        res.send(result);
+      }
+    );
+    // add featured by true {admin}
+    app.patch(
+      "/admin/make-featured",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const body = req.body;
+        const id = body.productId;
+        const filter = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+
+        const allProducts = await productCollection.find().toArray();
+        const featured = allProducts.filter(
+          (product) => product.is_featured === true
+        );
+        console.log(featured?.length);
+        if (featured.length >= 6) {
+          return res.send({ message: "Already six product featured" });
+        }
+        const update_product_states = {
+          $set: {
+            is_featured: true,
+          },
+        };
+        const result = await productCollection.updateOne(
+          filter,
+          update_product_states,
+          options
+        );
+        res.send(result);
+      }
+    );
+    // remove featured {admin}
+    app.patch(
+      "/admin/remove-featured",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.query.id;
+        const filter = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+        const update_product_states = {
+          $set: {
+            is_featured: false,
+          },
+        };
+        const result = await productCollection.updateOne(
+          filter,
+          update_product_states,
+          options
+        );
+        res.send(result);
+      }
+    );
+    // delete product {admin}
+    app.delete(
+      "/admin/delete-product",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.query.id;
+        const filter = { _id: new ObjectId(id) };
+        const result = await productCollection.deleteOne(filter);
+        res.send(result);
+      }
+    );
+    // search product {admin}
+    app.get(
+      "/admin/search-products/:search",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const searchProduct = req.params.search;
+        const result = await productCollection
+          .find({ name: { $regex: searchProduct, $options: "i" } })
+          .toArray();
+        res.send(result);
+      }
+    );
 
     await client.db("admin").command({ ping: 1 });
     console.log(
